@@ -9,6 +9,9 @@ use Nyholm\Psr7\Response;
 use PHPUnit\Framework\TestCase;
 use Wwsrapport\Client\Config;
 use Wwsrapport\Client\Exception\ValidationException;
+use Wwsrapport\Client\Model\Document;
+use Wwsrapport\Client\Model\Report;
+use Wwsrapport\Client\Model\WebhookEndpoint;
 use Wwsrapport\Client\Tests\Fakes\FakeHttpClient;
 use Wwsrapport\Client\WwsrapportClient;
 
@@ -112,6 +115,92 @@ final class WwsrapportClientTest extends TestCase
 
         $payload = json_decode((string) $http->requests[0]->getBody(), true);
         self::assertSame(['report.completed', 'report.failed'], $payload['events']);
+    }
+
+    public function test_it_can_map_report_responses_to_typed_objects(): void
+    {
+        $http = new FakeHttpClient([
+            new Response(200, ['Content-Type' => 'application/json'], json_encode([
+                'data' => [
+                    'id' => 'rpt_test_123',
+                    'public_id' => 'rpt_public_123',
+                    'status' => 'completed',
+                    'points' => 159,
+                    'max_rent_eur' => 1042.71,
+                    'rent_segment' => 'regulated',
+                ],
+            ], JSON_THROW_ON_ERROR)),
+        ]);
+        $client = $this->client($http);
+
+        $report = $client->reports()->getObject('rpt_test_123');
+
+        self::assertInstanceOf(Report::class, $report);
+        self::assertSame('rpt_test_123', $report->id());
+        self::assertSame('rpt_public_123', $report->publicId());
+        self::assertSame('completed', $report->status());
+        self::assertSame(159.0, $report->points());
+        self::assertSame(1042.71, $report->maxRentEur());
+        self::assertSame('regulated', $report->rentSegment());
+    }
+
+    public function test_it_can_map_document_lists_to_typed_objects(): void
+    {
+        $http = new FakeHttpClient([
+            new Response(200, ['Content-Type' => 'application/json'], json_encode([
+                'data' => [
+                    [
+                        'id' => 'doc_wws',
+                        'type' => 'wws_report',
+                        'status' => 'ready',
+                        'filename' => 'WWSR-2026-000001.pdf',
+                        'download_url' => 'https://wwsrapport.nl/download/doc_wws',
+                    ],
+                    [
+                        'id' => 'doc_advice',
+                        'type' => 'improvement_advice',
+                        'status' => 'ready',
+                    ],
+                ],
+            ], JSON_THROW_ON_ERROR)),
+        ]);
+        $client = $this->client($http);
+
+        $documents = $client->documents()->listObjects('rpt_test_123');
+
+        self::assertCount(2, $documents);
+        self::assertInstanceOf(Document::class, $documents[0]);
+        self::assertSame('doc_wws', $documents[0]->id());
+        self::assertSame('wws_report', $documents[0]->type());
+        self::assertSame('WWSR-2026-000001.pdf', $documents[0]->filename());
+    }
+
+    public function test_it_can_map_webhooks_to_typed_objects(): void
+    {
+        $http = new FakeHttpClient([
+            new Response(201, ['Content-Type' => 'application/json'], json_encode([
+                'data' => [
+                    'id' => 'wh_test_123',
+                    'url' => 'https://partner.example.test/wws/webhooks',
+                    'status' => 'active',
+                    'enabled' => true,
+                    'events' => ['report.completed'],
+                    'signing_secret' => 'whsec_test_secret',
+                ],
+            ], JSON_THROW_ON_ERROR)),
+        ]);
+        $client = $this->client($http);
+
+        $webhook = $client->webhooks()->createObject(
+            'https://partner.example.test/wws/webhooks',
+            ['report.completed'],
+        );
+
+        self::assertInstanceOf(WebhookEndpoint::class, $webhook);
+        self::assertSame('wh_test_123', $webhook->id());
+        self::assertTrue($webhook->enabled());
+        self::assertSame(['report.completed'], $webhook->events());
+        self::assertSame('whsec_test_secret', $webhook->signingSecret());
     }
 
     private function client(FakeHttpClient $http): WwsrapportClient

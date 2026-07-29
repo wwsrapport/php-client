@@ -6,6 +6,7 @@ namespace Wwsrapport\Client\Resources;
 
 use Wwsrapport\Client\Exception\WwsrapportException;
 use Wwsrapport\Client\Http\ApiClient;
+use Wwsrapport\Client\Model\Document;
 
 final class DocumentsResource
 {
@@ -17,6 +18,17 @@ final class DocumentsResource
     public function list(string $reportId): array
     {
         return $this->api->json('GET', '/reports/'.$this->encode($reportId).'/documents');
+    }
+
+    /**
+     * @return array<int, Document>
+     */
+    public function listObjects(string $reportId): array
+    {
+        return array_map(
+            static fn (array $item): Document => Document::fromArray($item),
+            $this->dataList($this->list($reportId)),
+        );
     }
 
     public function downloadWwsReport(string $reportId): string
@@ -45,5 +57,20 @@ final class DocumentsResource
     private function encode(string $value): string
     {
         return rawurlencode($value);
+    }
+
+    /**
+     * @param  array<string, mixed>  $response
+     * @return array<int, array<string, mixed>>
+     */
+    private function dataList(array $response): array
+    {
+        $data = $response['data'] ?? $response;
+
+        if (! is_array($data)) {
+            return [];
+        }
+
+        return array_values(array_filter($data, 'is_array'));
     }
 }

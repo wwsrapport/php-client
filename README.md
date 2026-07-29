@@ -96,6 +96,28 @@ $client->reports()->improvementAdvice('rpt_...');
 
 Always pass an `Idempotency-Key` when creating a report. Use a stable key from your own order or request id so retries cannot create duplicate reports or consume duplicate quota.
 
+## Typed Response Objects
+
+Every endpoint still returns the raw API array by default. If you prefer typed helper objects, use the matching `*Object()` methods:
+
+```php
+use Wwsrapport\Client\Model\Report;
+
+/** @var Report $report */
+$report = $client->reports()->getObject('rpt_...');
+
+echo $report->reportNumber();
+echo $report->points();
+echo $report->maxRentEur();
+
+$documents = $client->documents()->listObjects('rpt_...');
+foreach ($documents as $document) {
+    echo $document->type().' '.$document->status();
+}
+```
+
+Typed helpers are available for property prefill, report validation, reports, calculation results, improvement advice, documents, usage, rulesets, webhooks, and webhook deliveries.
+
 ## Documents
 
 ```php

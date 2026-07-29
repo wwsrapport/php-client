@@ -1,0 +1,128 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Wwsrapport\Client\Tests;
+
+use Nyholm\Psr7\Factory\Psr17Factory;
+use Nyholm\Psr7\Response;
+use PHPUnit\Framework\TestCase;
+use Wwsrapport\Client\Config;
+use Wwsrapport\Client\Exception\ValidationException;
+use Wwsrapport\Client\Tests\Fakes\FakeHttpClient;
+use Wwsrapport\Client\WwsrapportClient;
+
+final class WwsrapportClientTest extends TestCase
+{
+    public function test_it_creates_a_report_with_authorization_and_idempotency_key(): void
+    {
+        $http = new FakeHttpClient([
+            new Response(201, ['Content-Type' => 'application/json'], json_encode([
+                'data' => [
+                    'id' => 'rpt_test_123',
+                    'status' => 'paid',
+                ],
+                'meta' => [
+                    'environment' => 'sandbox',
+                ],
+            ], JSON_THROW_ON_ERROR)),
+        ]);
+        $client = $this->client($http);
+
+        $result = $client->reports()->create([
+            'external_reference' => 'partner-order-1',
+            'address' => [
+                'postcode' => '3905RB',
+                'house_number' => '4',
+            ],
+        ], 'partner-order-1');
+
+        self::assertSame('rpt_test_123', $result['data']['id']);
+        self::assertCount(1, $http->requests);
+
+        $request = $http->requests[0];
+        self::assertSame('POST', $request->getMethod());
+        self::assertSame('/v1/reports', $request->getUri()->getPath());
+        self::assertSame('Bearer wwsr_test_secret', $request->getHeaderLine('Authorization'));
+        self::assertSame('partner-order-1', $request->getHeaderLine('Idempotency-Key'));
+        self::assertSame('application/json', $request->getHeaderLine('Content-Type'));
+    }
+
+    public function test_it_maps_validation_errors(): void
+    {
+        $http = new FakeHttpClient([
+            new Response(422, [
+                'Content-Type' => 'application/problem+json',
+                'X-Request-Id' => 'req_test_123',
+            ], json_encode([
+                'title' => 'Validation failed',
+                'code' => 'validation_failed',
+                'errors' => [
+                    'address.postcode' => ['The postcode is required.'],
+                ],
+            ], JSON_THROW_ON_ERROR)),
+        ]);
+        $client = $this->client($http);
+
+        try {
+            $client->reports()->validate([]);
+            self::fail('Expected a validation exception.');
+        } catch (ValidationException $exception) {
+            self::assertSame(422, $exception->statusCode());
+            self::assertSame('req_test_123', $exception->requestId());
+            self::assertArrayHasKey('address.postcode', $exception->errors());
+        }
+    }
+
+    public function test_it_downloads_documents_as_binary_pdf_content(): void
+    {
+        $http = new FakeHttpClient([
+            new Response(200, ['Content-Type' => 'application/pdf'], '%PDF-1.4 test'),
+        ]);
+        $client = $this->client($http);
+
+        $content = $client->documents()->downloadWwsReport('rpt_test_123');
+
+        self::assertSame('%PDF-1.4 test', $content);
+        self::assertSame('/v1/reports/rpt_test_123/documents/wws-report', $http->requests[0]->getUri()->getPath());
+    }
+
+    public function test_it_creates_webhooks_and_returns_one_time_secret(): void
+    {
+        $http = new FakeHttpClient([
+            new Response(201, ['Content-Type' => 'application/json'], json_encode([
+                'data' => [
+                    'id' => 'wh_test_123',
+                    'signing_secret' => 'whsec_test_secret',
+                    'secret_hint' => 't_secret',
+                    'status' => 'active',
+                ],
+            ], JSON_THROW_ON_ERROR)),
+        ]);
+        $client = $this->client($http);
+
+        $result = $client->webhooks()->create(
+            'https://partner.example.test/wws/webhooks',
+            ['report.completed', 'report.failed'],
+            'Partner endpoint',
+        );
+
+        self::assertSame('wh_test_123', $result['data']['id']);
+        self::assertSame('/v1/webhooks', $http->requests[0]->getUri()->getPath());
+
+        $payload = json_decode((string) $http->requests[0]->getBody(), true);
+        self::assertSame(['report.completed', 'report.failed'], $payload['events']);
+    }
+
+    private function client(FakeHttpClient $http): WwsrapportClient
+    {
+        $factory = new Psr17Factory();
+
+        return new WwsrapportClient(
+            new Config('wwsr_test_secret', 'https://wwsrapport.nl/v1'),
+            $http,
+            $factory,
+            $factory,
+        );
+    }
+}

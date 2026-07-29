@@ -36,7 +36,7 @@ final class WwsrapportClientTest extends TestCase
             'external_reference' => 'partner-order-1',
             'address' => [
                 'postcode' => '3905RB',
-                'house_number' => '4',
+                'house_number' => 4,
             ],
         ], 'partner-order-1');
 
@@ -49,6 +49,9 @@ final class WwsrapportClientTest extends TestCase
         self::assertSame('Bearer wwsr_test_secret', $request->getHeaderLine('Authorization'));
         self::assertSame('partner-order-1', $request->getHeaderLine('Idempotency-Key'));
         self::assertSame('application/json', $request->getHeaderLine('Content-Type'));
+
+        $payload = json_decode((string) $request->getBody(), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame('4', $payload['address']['house_number']);
     }
 
     public function test_it_maps_validation_errors(): void

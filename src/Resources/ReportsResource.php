@@ -19,7 +19,7 @@ final class ReportsResource
      */
     public function validate(array $payload): array
     {
-        return $this->api->json('POST', '/reports/validate', $payload);
+        return $this->api->json('POST', '/reports/validate', $this->normalizePayload($payload));
     }
 
     public function validateObject(array $payload): ReportValidationResult
@@ -35,7 +35,7 @@ final class ReportsResource
      */
     public function create(array $payload, string $idempotencyKey): array
     {
-        return $this->api->json('POST', '/reports', $payload, [], [
+        return $this->api->json('POST', '/reports', $this->normalizePayload($payload), [], [
             'Idempotency-Key' => $idempotencyKey,
         ]);
     }
@@ -106,6 +106,26 @@ final class ReportsResource
     private function encode(string $value): string
     {
         return rawurlencode($value);
+    }
+
+    /**
+     * Keep partner integrations forgiving for common form values while leaving
+     * the API contract strict and predictable.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function normalizePayload(array $payload): array
+    {
+        if (isset($payload['address']) && is_array($payload['address'])) {
+            foreach (['postcode', 'postal_code', 'house_number', 'house_number_addition'] as $field) {
+                if (array_key_exists($field, $payload['address']) && is_scalar($payload['address'][$field])) {
+                    $payload['address'][$field] = trim((string) $payload['address'][$field]);
+                }
+            }
+        }
+
+        return $payload;
     }
 
     /**

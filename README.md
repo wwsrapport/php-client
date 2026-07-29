@@ -4,6 +4,21 @@ Official PHP SDK for the [WWSrapport API](https://wwsrapport.nl/api/docs).
 
 Use this package to create WWS reports, retrieve immutable report data, download PDFs, manage webhook endpoints, and verify webhook signatures.
 
+## Official Links
+
+- API overview and Swagger: [wwsrapport.nl/api/docs](https://wwsrapport.nl/api/docs)
+- OpenAPI JSON: [wwsrapport.nl/api/openapi.json](https://wwsrapport.nl/api/openapi.json)
+- Request a partner account: [wwsrapport.nl/api/toegang-aanvragen](https://wwsrapport.nl/api/toegang-aanvragen)
+- WWSrapport account and API keys: [wwsrapport.nl/account](https://wwsrapport.nl/account)
+- GitHub organization: [github.com/wwsrapport](https://github.com/wwsrapport)
+
+Official clients:
+
+- [PHP client](https://github.com/wwsrapport/php-client)
+- [TypeScript client](https://github.com/wwsrapport/typescript-client)
+- [Python client](https://github.com/wwsrapport/python-client)
+- [API examples](https://github.com/wwsrapport/examples)
+
 ## Installation
 
 ```bash

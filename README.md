@@ -2,6 +2,8 @@
 
 Official PHP SDK for the [WWSrapport API](https://wwsrapport.nl/api/docs).
 
+Solana registry helpers are available through `registry()->deriveBagReference()` and `registry()->searchByBag()`; report verification is available through `reports()->verification()`. `WebhookEvents::ALL` contains all 27 supported event types.
+
 Use this package to create WWS reports, retrieve immutable report data, download PDFs, manage webhook endpoints, and verify webhook signatures.
 
 ## Official Links

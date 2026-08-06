@@ -17,6 +17,16 @@ use Wwsrapport\Client\WwsrapportClient;
 
 final class WwsrapportClientTest extends TestCase
 {
+    public function test_it_derives_a_bag_reference_through_the_registry_api(): void
+    {
+        $http = new FakeHttpClient([new Response(200, ['Content-Type' => 'application/json'], '{"data":{"bagReference":"reference"}}')]);
+        $client = $this->client($http);
+        $client->registry()->deriveBagReference('0123456789012345');
+
+        self::assertSame('/v1/registry/bag-reference', $http->requests[0]->getUri()->getPath());
+        self::assertSame(['bagVboId' => '0123456789012345'], json_decode((string) $http->requests[0]->getBody(), true));
+    }
+
     public function test_it_creates_a_report_with_authorization_and_idempotency_key(): void
     {
         $http = new FakeHttpClient([

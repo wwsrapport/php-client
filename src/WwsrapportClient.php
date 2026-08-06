@@ -12,6 +12,7 @@ use Psr\Http\Message\StreamFactoryInterface;
 use Wwsrapport\Client\Http\ApiClient;
 use Wwsrapport\Client\Resources\DocumentsResource;
 use Wwsrapport\Client\Resources\PropertiesResource;
+use Wwsrapport\Client\Resources\RegistryResource;
 use Wwsrapport\Client\Resources\ReportsResource;
 use Wwsrapport\Client\Resources\RulesetsResource;
 use Wwsrapport\Client\Resources\UsageResource;
@@ -57,6 +58,11 @@ final class WwsrapportClient
     public function reports(): ReportsResource
     {
         return new ReportsResource($this->api);
+    }
+
+    public function registry(): RegistryResource
+    {
+        return new RegistryResource($this->api);
     }
 
     public function documents(): DocumentsResource

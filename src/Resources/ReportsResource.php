@@ -153,4 +153,9 @@ final class ReportsResource
 
         return array_values(array_filter($data, 'is_array'));
     }
+
+    public function verification(string $reportId): array
+    {
+        return $this->api->json('GET', '/reports/'.$this->encode($reportId).'/verification');
+    }
 }

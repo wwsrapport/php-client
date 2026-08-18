@@ -10,6 +10,10 @@ use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
 use Psr\Http\Message\StreamFactoryInterface;
 use Wwsrapport\Client\Http\ApiClient;
+use Wwsrapport\Client\Auth\AccessTokenProvider;
+use Wwsrapport\Client\Auth\OAuthClientCredentialsProvider;
+use Wwsrapport\Client\Resources\BatchesResource;
+use Wwsrapport\Client\Resources\TenantLifecycleResource;
 use Wwsrapport\Client\Resources\DocumentsResource;
 use Wwsrapport\Client\Resources\PropertiesResource;
 use Wwsrapport\Client\Resources\RegistryResource;
@@ -27,8 +31,21 @@ final class WwsrapportClient
         ClientInterface $httpClient,
         RequestFactoryInterface $requestFactory,
         StreamFactoryInterface $streamFactory,
+        ?AccessTokenProvider $accessTokenProvider = null,
     ) {
-        $this->api = new ApiClient($config, $httpClient, $requestFactory, $streamFactory);
+        $this->api = new ApiClient($config, $httpClient, $requestFactory, $streamFactory, $accessTokenProvider);
+    }
+
+    /** @param list<string> $scopes */
+    public static function createOAuth(string $clientId, string $clientSecret, array $scopes = [], ?string $baseUrl = null, ?RequestContext $requestContext = null): self
+    {
+        $factory = new Psr17Factory();
+        $config = new Config('__oauth__', $baseUrl ?? 'https://wwsrapport.nl/v1', requestContext: $requestContext);
+        $http = new GuzzleClient();
+
+        return new self($config, $http, $factory, $factory, new OAuthClientCredentialsProvider(
+            $clientId, $clientSecret, $config->tokenUrl(), $http, $factory, $factory, $scopes,
+        ));
     }
 
     public static function create(string $apiKey, ?string $baseUrl = null): self
@@ -83,5 +100,15 @@ final class WwsrapportClient
     public function webhooks(): WebhooksResource
     {
         return new WebhooksResource($this->api);
+    }
+
+    public function batches(): BatchesResource
+    {
+        return new BatchesResource($this->api);
+    }
+
+    public function tenantLifecycle(): TenantLifecycleResource
+    {
+        return new TenantLifecycleResource($this->api);
     }
 }

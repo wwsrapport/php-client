@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.0] - 2026-08-18
+
+### Added
+
+- OAuth 2.0 client-credentials authentication with short-lived token caching.
+- Separate municipality, purpose, case and client context headers.
+- Bounded batch, human-review, tenant-export and offboarding helpers.
+- API version, request ID and correlation ID headers.
+
+### Changed
+
+- Existing API-key authentication remains backwards compatible.
+- NLGov `400 invalid_input` problems map to `ValidationException` alongside legacy HTTP 422 responses.
+
 ## [0.2.1] - 2026-08-06
 
 ### Added

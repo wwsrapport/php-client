@@ -14,6 +14,11 @@ final class ReportsResource
 {
     public function __construct(private readonly ApiClient $api) {}
 
+    public function submitHumanReview(string $reportId, array $review, string $idempotencyKey): array
+    {
+        return $this->api->json('POST', '/reports/'.rawurlencode($reportId).'/human-review', $review, [], ['Idempotency-Key' => $idempotencyKey]);
+    }
+
     /**
      * @return array<string, mixed>
      */

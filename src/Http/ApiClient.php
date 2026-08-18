@@ -10,6 +10,8 @@ use Psr\Http\Message\RequestFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\StreamFactoryInterface;
 use Wwsrapport\Client\Config;
+use Wwsrapport\Client\Auth\AccessTokenProvider;
+use Wwsrapport\Client\Auth\StaticAccessTokenProvider;
 use Wwsrapport\Client\Exception\ApiException;
 use Wwsrapport\Client\Exception\AuthenticationException;
 use Wwsrapport\Client\Exception\AuthorizationException;
@@ -27,7 +29,12 @@ final class ApiClient
         private readonly ClientInterface $httpClient,
         private readonly RequestFactoryInterface $requestFactory,
         private readonly StreamFactoryInterface $streamFactory,
-    ) {}
+        ?AccessTokenProvider $accessTokenProvider = null,
+    ) {
+        $this->accessTokenProvider = $accessTokenProvider ?? new StaticAccessTokenProvider($config->apiKey);
+    }
+
+    private readonly AccessTokenProvider $accessTokenProvider;
 
     /**
      * @return array<string, mixed>
@@ -69,10 +76,17 @@ final class ApiClient
     private function send(string $method, string $path, ?array $body, array $query, array $headers): ResponseInterface
     {
         $url = $this->url($path, $query);
+        $requestId = 'req_'.bin2hex(random_bytes(16));
         $request = $this->requestFactory
             ->createRequest($method, $url)
-            ->withHeader('Authorization', 'Bearer '.$this->config->apiKey)
-            ->withHeader('User-Agent', $this->config->userAgent);
+            ->withHeader('Authorization', 'Bearer '.$this->accessTokenProvider->token())
+            ->withHeader('User-Agent', $this->config->userAgent)
+            ->withHeader('X-Request-Id', $requestId)->withHeader('X-Correlation-Id', $requestId)
+            ->withHeader('API-Version', $this->config->apiVersion);
+
+        foreach ($this->config->requestContext?->headers() ?? [] as $name => $value) {
+            $request = $request->withHeader($name, $value);
+        }
 
         foreach ($headers as $name => $value) {
             if ($value !== null && $value !== '') {
@@ -116,14 +130,15 @@ final class ApiClient
         $message = $this->errorMessage($status, $problem);
         $requestId = $this->requestId($response, $problem);
 
-        $class = match ($status) {
-            401 => AuthenticationException::class,
-            402 => PaymentRequiredException::class,
-            403 => AuthorizationException::class,
-            404 => NotFoundException::class,
-            409 => ConflictException::class,
-            422 => ValidationException::class,
-            429 => RateLimitException::class,
+        $class = match (true) {
+            $status === 400 && in_array((string) ($problem['code'] ?? ''), ['invalid_input', 'validation_error'], true) => ValidationException::class,
+            $status === 401 => AuthenticationException::class,
+            $status === 402 => PaymentRequiredException::class,
+            $status === 403 => AuthorizationException::class,
+            $status === 404 => NotFoundException::class,
+            $status === 409 => ConflictException::class,
+            $status === 422 => ValidationException::class,
+            $status === 429 => RateLimitException::class,
             default => ApiException::class,
         };
 
@@ -163,6 +178,9 @@ final class ApiClient
      */
     private function requestId(ResponseInterface $response, ?array $problem = null): ?string
     {
+        if ($response->hasHeader('X-WWS-Request-Id')) {
+            return $response->getHeaderLine('X-WWS-Request-Id');
+        }
         if ($response->hasHeader('X-Request-Id')) {
             return $response->getHeaderLine('X-Request-Id');
         }

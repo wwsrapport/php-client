@@ -9,8 +9,8 @@ Use this package to create WWS reports, retrieve immutable report data, download
 ## Official Links
 
 - API overview and Swagger: [wwsrapport.nl/api/docs](https://wwsrapport.nl/api/docs)
-- OpenAPI JSON: [wwsrapport.nl/api/openapi.json](https://wwsrapport.nl/api/openapi.json)
-- Request a partner account: [wwsrapport.nl/api/toegang-aanvragen](https://wwsrapport.nl/api/toegang-aanvragen)
+- OpenAPI JSON: [wwsrapport.nl/v1/openapi.json](https://wwsrapport.nl/v1/openapi.json)
+- Create an organization account: [wwsrapport.nl/organisatie-account-aanmaken](https://wwsrapport.nl/organisatie-account-aanmaken)
 - WWSrapport account and API keys: [wwsrapport.nl/account](https://wwsrapport.nl/account)
 - GitHub organization: [github.com/wwsrapport](https://github.com/wwsrapport)
 
@@ -83,6 +83,21 @@ $client = WwsrapportClient::create('wwsr_live_...');
 
 Sandbox and production access are controlled by the API key that WWSrapport issues.
 
+OAuth client credentials and public-sector request context can be configured without changing existing API-key integrations:
+
+```php
+use Wwsrapport\Client\RequestContext;
+
+$client = WwsrapportClient::createOAuth(
+    clientId: $_ENV['WWSRAPPORT_CLIENT_ID'],
+    clientSecret: $_ENV['WWSRAPPORT_CLIENT_SECRET'],
+    scopes: ['reports:read', 'reports:write'],
+    requestContext: new RequestContext('GM0345', 'huurprijs-toezicht', 'ZAAK-2026-001', 'zaaksysteem'),
+);
+```
+
+The client caches the short-lived access token and sends municipality, purpose, case and client context as separate headers.
+
 ## Reports
 
 ```php
@@ -97,6 +112,23 @@ $client->reports()->improvementAdvice('rpt_...');
 ```
 
 Always pass an `Idempotency-Key` when creating a report. Use a stable key from your own order or request id so retries cannot create duplicate reports or consume duplicate quota.
+
+## Public-sector workflows
+
+```php
+$batch = $client->batches()->create($batchInput, 'portfolio-2026-08');
+$client->batches()->retry($batch['data']['id'], 'portfolio-2026-08-retry-1');
+
+$client->reports()->submitHumanReview('rpt_...', [
+    'status' => 'approved',
+    'reviewedByReference' => 'reviewer-team-7',
+    'outcome' => 'accepted_after_manual_check',
+], 'review-zaak-2026-001');
+
+$export = $client->tenantLifecycle()->requestExport('tenant-export-2026-08');
+```
+
+Offboarding is exposed as a controlled request. It does not silently delete dossiers.
 
 ## Typed Response Objects
 

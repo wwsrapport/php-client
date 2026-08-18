@@ -8,6 +8,8 @@ use Nyholm\Psr7\Factory\Psr17Factory;
 use Nyholm\Psr7\Response;
 use PHPUnit\Framework\TestCase;
 use Wwsrapport\Client\Config;
+use Wwsrapport\Client\Auth\OAuthClientCredentialsProvider;
+use Wwsrapport\Client\RequestContext;
 use Wwsrapport\Client\Exception\ValidationException;
 use Wwsrapport\Client\Model\Document;
 use Wwsrapport\Client\Model\Report;
@@ -214,6 +216,56 @@ final class WwsrapportClientTest extends TestCase
         self::assertTrue($webhook->enabled());
         self::assertSame(['report.completed'], $webhook->events());
         self::assertSame('whsec_test_secret', $webhook->signingSecret());
+    }
+
+    public function test_it_sends_version_request_and_optional_public_sector_context_headers(): void
+    {
+        $http = new FakeHttpClient([new Response(200, [], '{"data":[]}')]);
+        $factory = new Psr17Factory();
+        $client = new WwsrapportClient(new Config(
+            'wwsr_test_secret', 'https://wwsrapport.nl/v1',
+            requestContext: new RequestContext('GM0345', 'huurprijs-toezicht', 'ZAAK-1', 'zaaksysteem'),
+        ), $http, $factory, $factory);
+
+        $client->reports()->list();
+        $request = $http->requests[0];
+        self::assertSame('GM0345', $request->getHeaderLine('X-WWS-Municipality-Code'));
+        self::assertSame('huurprijs-toezicht', $request->getHeaderLine('X-WWS-Purpose-Code'));
+        self::assertSame('ZAAK-1', $request->getHeaderLine('X-WWS-Case-Reference'));
+        self::assertSame('zaaksysteem', $request->getHeaderLine('X-WWS-Client-Reference'));
+        self::assertSame('1.2.0', $request->getHeaderLine('API-Version'));
+    }
+
+    public function test_oauth_provider_caches_client_credentials_token(): void
+    {
+        $http = new FakeHttpClient([new Response(200, [], '{"access_token":"oauth-token","expires_in":300}')]);
+        $factory = new Psr17Factory();
+        $provider = new OAuthClientCredentialsProvider(
+            'client-id', 'client-secret', 'https://wwsrapport.nl/oauth/token', $http, $factory, $factory, ['reports:read'],
+        );
+
+        self::assertSame('oauth-token', $provider->token());
+        self::assertSame('oauth-token', $provider->token());
+        self::assertCount(1, $http->requests);
+        self::assertSame('Basic '.base64_encode('client-id:client-secret'), $http->requests[0]->getHeaderLine('Authorization'));
+        self::assertSame('grant_type=client_credentials&scope=reports%3Aread', (string) $http->requests[0]->getBody());
+    }
+
+    public function test_public_sector_resources_use_contract_paths_and_idempotency_keys(): void
+    {
+        $http = new FakeHttpClient(array_fill(0, 4, new Response(200, [], '{"data":{"id":"example"}}')));
+        $client = $this->client($http);
+        $client->batches()->create(['type' => 'address_check'], 'batch-key');
+        $client->batches()->retry('bat_1', 'retry-key');
+        $client->reports()->submitHumanReview('rpt_1', ['status' => 'approved'], 'review-key');
+        $client->tenantLifecycle()->requestExport('export-key');
+
+        self::assertSame([
+            '/v1/batches', '/v1/batches/bat_1/retry', '/v1/reports/rpt_1/human-review', '/v1/exports',
+        ], array_map(static fn ($request) => $request->getUri()->getPath(), $http->requests));
+        self::assertSame('batch-key', $http->requests[0]->getHeaderLine('Idempotency-Key'));
+        self::assertSame('review-key', $http->requests[2]->getHeaderLine('Idempotency-Key'));
+        self::assertSame('export-key', $http->requests[3]->getHeaderLine('Idempotency-Key'));
     }
 
     private function client(FakeHttpClient $http): WwsrapportClient
